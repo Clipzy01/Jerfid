@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Jeopardy — 4 jucători</title>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;margin:0;background:#0b1220;color:#fff}
+    .container{max-width:1100px;margin:20px auto;padding:16px}
+    h1{margin:0 0 12px 0;text-align:center}
+    .top{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+    .players{display:flex;gap:8px}
+    .player{background:#122231;padding:10px;border-radius:6px;min-width:180px}
+    .player input{name:none;width:100%;margin-bottom:6px;padding:6px}
+    .score{font-size:20px;font-weight:700;margin:6px 0}
+    .active{outline:3px solid #4caf50}
+    .board{margin-top:18px;display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+    .category{background:#1b2b40;padding:10px;text-align:center;font-weight:700}
+    .cell{background:#07355b;padding:18px;text-align:center;font-weight:700;cursor:pointer;border-radius:4px}
+    .cell.disabled{opacity:0.35;cursor:default}
+    .modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);visibility:hidden}
+    .modal.show{visibility:visible}
+    .card{background:#0f1720;padding:18px;border-radius:8px;max-width:720px;width:96%}
+    .card .clue{font-size:18px;margin-bottom:12px}
+    .controls{display:flex;gap:8px;flex-wrap:wrap}
+    button{background:#2563eb;border:0;color:#fff;padding:8px 10px;border-radius:6px;cursor:pointer}
+    button.warn{background:#ef4444}
+    button.ghost{background:transparent;border:1px solid #334155}
+    footer{margin-top:18px;text-align:center;color:#9aa7b7;font-size:13px}
+    @media(max-width:800px){.players{flex-direction:column}.player{min-width:unset}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Jeopardy — Temă: Videogames (4 jucători)</h1>
+    <div class="top">
+      <div class="players" id="players"></div>
+      <div>
+        <div>Jucător curent: <strong id="currentName">—</strong></div>
+        <div style="margin-top:8px">Selectează jucătorul și folosește butoanele corect/greșit în fereastra de întrebare.</div>
+      </div>
+    </div>
+
+    <div class="board" id="board"></div>
+
+    <div class="modal" id="modal">
+      <div class="card">
+        <div class="clue" id="clueText"></div>
+        <div style="margin-bottom:12px">Valoare: <span id="clueValue"></span> puncte</div>
+        <div class="controls">
+          <button id="reveal">Afișează răspunsul</button>
+          <button class="ghost" id="close">Închide</button>
+          <button id="correct">Corect</button>
+          <button class="warn" id="incorrect">Greșit</button>
+        </div>
+        <div style="margin-top:12px;color:#cbd5e1" id="answerText"></div>
+      </div>
+    </div>
+
+    <footer>Încărcat local — salvează fișierul și deschide-l în browser pentru a juca.</footer>
+  </div>
+
+  <script>
+    const data = [
+      {name:'Minecraft', q:[
+        {v:100,cl:'Bloc obținut din trunchi de copac, folosit frecvent la crafting și construcții.',a:'Ce este lemnul?'},
+        {v:200,cl:'Mob exploziv care apare noaptea sau în tuneluri.',a:'Ce este Creeper?'},
+        {v:300,cl:'Numărul maxim implicit de iteme într-o stivă pentru majoritatea obiectelor.',a:'Ce este 64?'},
+        {v:400,cl:'Material introdus după diamant, folosit pentru îmbunătățirea uneltelor la nivel maxim.',a:'Ce este Netherite?'},
+        {v:500,cl:'Structură subterană generată cu galerii, coridoare și cufere.',a:'Ce este mineshaft (mină abandonată)?'},
+        {v:1000,cl:'Metoda comună de a colecta Dragon Egg în survival fără comenzi.',a:'Ce este așezarea unei torțe sub bloc și spargerea blocului astfel încât oul cade ca obiect?'}
+      ]},
+      {name:'Subnautica', q:[
+        {v:100,cl:'Numărul/denumirea planetei pe care se desfășoară acțiunea.',a:'Ce este 4546B?'},
+        {v:200,cl:'Resursă esențială pentru a respira sub apă pe perioade lungi (indicator de timp).',a:'Ce este rezervorul de oxigen?'},
+        {v:300,cl:'Vehicul submersibil mic, manevrabil, folosit pentru explorări personale.',a:'Ce este Seamoth?'},
+        {v:400,cl:'Numele navei prăbușite care declanșează evenimentele principale.',a:'Ce este Aurora?'},
+        {v:500,cl:'Unealta folosită la construirea bazelor subacvatice modulare.',a:'Ce este Habitat Builder?'},
+        {v:1000,cl:'Numele agentului patogen central în povestea jocului.',a:'Ce este Kharaa?'}
+      ]},
+      {name:'Fortnite', q:[
+        {v:100,cl:'Modul de joc în care 100 de jucători luptă până rămâne unul.',a:'Ce este Battle Royale?'},
+        {v:200,cl:'Monedă virtuală folosită pentru a cumpăra skinuri (abreviere).',a:'Ce sunt V-Bucks?'},
+        {v:300,cl:'Cele trei materiale principale folosite pentru construcții.',a:'Ce sunt lemn, piatră și metal?'},
+        {v:400,cl:'Acțiunea de a construi rapid pereți, scări și podele pentru avantaj în luptă.',a:'Ce este building (construcție rapidă)?'},
+        {v:500,cl:'Tip de obiect cosmetic care schimbă doar animațiile și mișcările jucătorului.',a:'Ce sunt emote-urile?'},
+        {v:1000,cl:'Denumirea comună pentru arma foarte puternică/rară din anumite sezoane.',a:'Ce este o armă mythic (legendară)?'}
+      ]},
+      {name:'Valorant', q:[
+        {v:100,cl:'Rolul de agent axat pe intrări și eliminări rapide.',a:'Ce este Duelist?'},
+        {v:200,cl:'Numărul jucătorilor dintr-o echipă standard.',a:'Ce este 5?'},
+        {v:300,cl:'Resursă premium folosită pentru a debloca skinuri.',a:'Ce sunt Radiant Points / Valorant Points?'},
+        {v:400,cl:'Agent care are abilități de vindecare, capabil să susțină echipa.',a:'Ce este Sage?'},
+        {v:500,cl:'Modul principal competitiv oficial, cu runde și faze de cumpărături.',a:'Ce este Competitive?'},
+        {v:1000,cl:'Termen legat de acțiunea de a planta/defuza obiectivul central.',a:'Ce este plant/defuse (acțiunea Spike)?'}
+      ]},
+      {name:'Slime Rancher', q:[
+        {v:100,cl:'Numele protagonistei jucabile.',a:'Ce este Beatrix LeBeau?'},
+        {v:200,cl:'Resursa primară obținută de la slimes, vândută pentru profit.',a:'Ce sunt plorts?'},
+        {v:300,cl:'Unealta principală folosită pentru a aspira și arunca slimes.',a:'Ce este Vacpack?'},
+        {v:400,cl:'Zona îndepărtată numită "Far Far Range".',a:'Ce este Far Far Range?'},
+        {v:500,cl:'Tip de slime care combină două elemente și produce un plort mixt.',a:'Ce este slime hibrid (combination slime)?'},
+        {v:1000,cl:'Metodă rară de a obține un Gold Slime/Gold Plort folosind obiecte speciale.',a:'Ce este atragerea unui Gold Slime cu obiecte norocoase (Gold Lure)?'}
+      ]}
+    ];
+
+    const playersEl = document.getElementById('players');
+    const boardEl = document.getElementById('board');
+    const modal = document.getElementById('modal');
+    const clueText = document.getElementById('clueText');
+    const clueValue = document.getElementById('clueValue');
+    const answerText = document.getElementById('answerText');
+    const revealBtn = document.getElementById('reveal');
+    const closeBtn = document.getElementById('close');
+    const correctBtn = document.getElementById('correct');
+    const incorrectBtn = document.getElementById('incorrect');
+    const currentName = document.getElementById('currentName');
+
+    let players = [
+      {name:'Jucător 1',score:0},
+      {name:'Jucător 2',score:0},
+      {name:'Jucător 3',score:0},
+      {name:'Jucător 4',score:0}
+    ];
+    let active = 0; // index
+    let currentClue = null;
+
+    function renderPlayers(){
+      playersEl.innerHTML = '';
+      players.forEach((p,i)=>{
+        const el = document.createElement('div'); el.className='player'+(i===active? ' active':'');
+        el.innerHTML = `<div><input value="${p.name}" data-i="${i}" class="nameInput"/></div><div class="score" id="score${i}">${p.score}</div><div style="display:flex;gap:6px;margin-top:6px"><button data-set="${i}">Selectează</button><button data-add="${i}">+100</button><button data-sub="${i}">-100</button></div>`;
+        playersEl.appendChild(el);
+      });
+    }
+
+    playersEl.addEventListener('click',e=>{
+      if(e.target.dataset.set!==undefined){ active = Number(e.target.dataset.set); updateActive(); }
+      if(e.target.dataset.add!==undefined){ const i=Number(e.target.dataset.add); players[i].score+=100; updateScores(); }
+      if(e.target.dataset.sub!==undefined){ const i=Number(e.target.dataset.sub); players[i].score-=100; updateScores(); }
+      if(e.target.classList.contains('nameInput')) return;
+    });
+
+    playersEl.addEventListener('change',e=>{
+      if(e.target.classList.contains('nameInput')){
+        const i = Number(e.target.dataset.i); players[i].name = e.target.value; updateActive();
+      }
+    });
+
+    function updateActive(){
+      renderPlayers(); currentName.textContent = players[active].name; updateScores();
+    }
+
+    function updateScores(){
+      players.forEach((p,i)=>{ const el=document.getElementById('score'+i); if(el) el.textContent = p.score; });
+    }
+
+    function buildBoard(){
+      boardEl.innerHTML='';
+      data.forEach(cat=>{
+        const h = document.createElement('div'); h.className='category'; h.textContent=cat.name; boardEl.appendChild(h);
+      });
+      const vals = [100,200,300,400,500,1000];
+      vals.forEach(v=>{
+        data.forEach((cat,ci)=>{
+          const q = cat.q.find(x=>x.v===v);
+          const btn = document.createElement('div'); btn.className='cell'; btn.textContent = v; btn.dataset.cat = ci; btn.dataset.val = v;
+          btn.addEventListener('click',()=>openClue(btn,q,ci));
+          boardEl.appendChild(btn);
+        });
+      });
+    }
+
+    function openClue(btn,q,ci){
+      if(!q || btn.classList.contains('disabled')) return;
+      currentClue = {btn,q,ci};
+      clueText.textContent = q.cl;
+      clueValue.textContent = q.v;
+      answerText.textContent = '';
+      modal.classList.add('show');
+      btn.classList.add('disabled');
+    }
+
+    revealBtn.addEventListener('click',()=>{ answerText.textContent = currentClue.q.a; });
+    closeBtn.addEventListener('click',()=>{ modal.classList.remove('show'); currentClue=null; });
+
+    correctBtn.addEventListener('click',()=>{
+      if(!currentClue) return;
+      players[active].score += currentClue.q.v; updateScores(); modal.classList.remove('show'); currentClue=null;
+    });
+    incorrectBtn.addEventListener('click',()=>{
+      if(!currentClue) return;
+      players[active].score -= currentClue.q.v; updateScores(); modal.classList.remove('show'); currentClue=null;
+    });
+
+    renderPlayers(); buildBoard(); updateActive();
+  </script>
+</body>
+</html>
